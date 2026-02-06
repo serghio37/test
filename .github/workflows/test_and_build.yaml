@@ -6,7 +6,7 @@ on:
 
 permissions:
   contents: read
-  package: write
+  packages: write
 jobs:
   test_and_build:
     runs-on: ubuntu-latest
