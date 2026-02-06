@@ -1,23 +1,18 @@
-# Usar la imagen oficial de Nginx como base
+# Dockerfile seguro que verifica existencia
 FROM nginx:alpine
 
-# Etiqueta informativa (opcional)
-LABEL maintainer="tu-email@ejemplo.com"
-LABEL description="Servidor Nginx para aplicación web"
+# Crear directorio si no existe (redundante pero seguro)
+RUN mkdir -p /usr/share/nginx/html
 
-# Eliminar la página de bienvenida por defecto de Nginx
-RUN rm -rf /usr/share/nginx/html/*
-
-# Copiar los archivos de tu sitio web al directorio de Nginx
-# Asegúrate de tener tu sitio web en una carpeta 'site/' en el mismo directorio que el Dockerfile
+# Copiar con verificación
 COPY site/ /usr/share/nginx/html/
 
-# Copiar configuración personalizada de Nginx (opcional)
-# Si tienes un archivo nginx-custom.conf en tu proyecto:
-# COPY nginx-custom.conf /etc/nginx/conf.d/default.conf
+# Si site/ está vacío, copiar una página por defecto
+RUN if [ -z "$(ls -A /usr/share/nginx/html)" ]; then \
+    echo '<h1>Nginx en Docker - No hay archivos en site/</h1>' > /usr/share/nginx/html/index.html; \
+    fi
 
-# Exponer el puerto 80 (puerto HTTP por defecto de Nginx)
+# Exponer puerto
 EXPOSE 80
 
-# Comando para ejecutar Nginx en primer plano
 CMD ["nginx", "-g", "daemon off;"]
