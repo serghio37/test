@@ -1,0 +1,12 @@
+# .dockerignore MÍNIMO
+.git
+.gitignore
+node_modules/
+__pycache__/
+*.pyc
+.env
+*.log
+.DS_Store
+.vscode/
+README.md
+docker-compose*.yml
