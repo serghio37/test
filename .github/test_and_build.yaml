@@ -21,6 +21,6 @@ jobs:
       with:
         python-version: "3.11"
     - name: Install dependencies
-      run: pip install -r requirements.txt-complexity=10 --max-line-length=127 --statistics
+      run: pip install -r requirements.txt
     - name: Test with pytest
       run: pytest tests.py
