@@ -1,18 +1,11 @@
-# Dockerfile seguro que verifica existencia
+# Dockerfile mínimo para Nginx
 FROM nginx:alpine
 
-# Crear directorio si no existe (redundante pero seguro)
-RUN mkdir -p /usr/share/nginx/html
-
-# Copiar con verificación
+# Copiar sitio web a Nginx
 COPY site/ /usr/share/nginx/html/
 
-# Si site/ está vacío, copiar una página por defecto
-RUN if [ -z "$(ls -A /usr/share/nginx/html)" ]; then \
-    echo '<h1>Nginx en Docker - No hay archivos en site/</h1>' > /usr/share/nginx/html/index.html; \
-    fi
-
-# Exponer puerto
+# Puerto que expone Nginx
 EXPOSE 80
 
+# Comando para iniciar Nginx
 CMD ["nginx", "-g", "daemon off;"]
