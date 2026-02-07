@@ -1,6 +1,5 @@
 
-### **5. 📄 `.github/workflows/test_and_build.yaml`** (TU ARCHIVO - corregido)
-```yaml
+### **5. 📄 `.github/workflows/test_and_build.yaml`** (TU ARCHIVO - corregido)yaml
 name: Test and Build
 
 on:
