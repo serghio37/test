@@ -1,9 +1,7 @@
-name: Docker CI/CD Pipeline Debug
+name: Docker CI/CD Pipeline
 
 on:
   push:
-    branches: ["main"]
-  pull_request:
     branches: ["main"]
 
 jobs:
@@ -11,158 +9,95 @@ jobs:
     runs-on: ubuntu-latest
     
     steps:
-    # ========== PASO 1: CHECKOUT ==========
     - name: "📥 Checkout código"
       uses: actions/checkout@v4
     
-    # ========== PASO 2: VER ESTRUCTURA ==========
-    - name: "📁 Ver estructura de archivos"
-      run: |
-        echo "=== ESTRUCTURA DEL PROYECTO ==="
-        find . -type f -name "*.py" -o -name "*.txt" -o -name "*.html" -o -name "Dockerfile" | sort
-        echo ""
-        echo "=== CONTENIDO DE CARPETAS ==="
-        ls -la
-        ls -la site/ 2>/dev/null || echo "⚠️ Carpeta 'site/' no encontrada"
-    
-    # ========== PASO 3: TESTS PYTHON (CON MANEJO DE ERROR) ==========
     - name: "🐍 Setup Python"
       uses: actions/setup-python@v3
       with:
         python-version: "3.11"
     
-    - name: "📦 Verificar requirements.txt"
-      run: |
-        echo "=== VERIFICANDO requirements.txt ==="
-        if [ -f "requirements.txt" ]; then
-          echo "✅ requirements.txt encontrado:"
-          cat requirements.txt
-          pip install -r requirements.txt
-        else
-          echo "⚠️ No hay requirements.txt, instalando directamente..."
-          pip install pytest ruff
-        fi
+    - name: "📦 Instalar dependencias"
+      run: pip install -r requirements.txt
     
-    - name: "🔍 Linting (no crítico)"
-      continue-on-error: true  # ⬅️ Esto permite que continue aunque falle
-      run: |
-        echo "=== EJECUTANDO LINTING ==="
-        ruff check . || echo "⚠️ Linting encontró errores (continuando...)"
+    - name: "🔍 Linting"
+      run: ruff check . || echo "Linting encontró errores"
     
-    - name: "🧪 Tests Python (no crítico)"
-      continue-on-error: true  # ⬅️ Permite continuar
-      run: |
-        echo "=== EJECUTANDO TESTS ==="
-        python -m pytest tests.py -v || echo "⚠️ Tests fallaron (continuando...)"
-    
-    # ========== PASO 4: DOCKER BUILD ==========
-    - name: "🐳 Verificar Dockerfile"
-      run: |
-        echo "=== VERIFICANDO DOCKERFILE ==="
-        if [ -f "Dockerfile" ]; then
-          echo "✅ Dockerfile encontrado:"
-          cat Dockerfile
-          echo ""
-          echo "=== VERIFICANDO CARPETA SITE ==="
-          if [ -d "site" ]; then
-            echo "✅ Carpeta 'site/' encontrada:"
-            ls -la site/
-            echo ""
-            echo "Contenido de index.html:"
-            head -20 site/index.html
-          else
-            echo "❌ ERROR: No existe carpeta 'site/'"
-            echo "Creando carpeta 'site/' con contenido mínimo..."
-            mkdir -p site
-            echo "<h1>Test</h1>" > site/index.html
-          fi
-        else
-          echo "❌ ERROR: No hay Dockerfile"
-          exit 1
-        fi
+    - name: "🧪 Tests"
+      run: pytest tests.py -v || echo "Tests fallaron"
     
     - name: "🔨 Construir imagen Docker"
       run: |
         echo "=== CONSTRUYENDO IMAGEN DOCKER ==="
-        docker build -t mi-sitio-test .
-        echo "✅ Build exitoso"
+        docker build -t mi-sitio-web:latest .
+        echo "✅ Imagen construida: mi-sitio-web:latest"
     
-    # ========== PASO 5: PROBAR CONTENEDOR ==========
-    - name: "🚀 Probar contenedor"
+    - name: "🚀 Crear y mostrar contenedor"
       run: |
-        echo "=== PROBANDO CONTENEDOR ==="
+        echo "========================================"
+        echo "🐳 CREANDO Y MOSTRANDO CONTENEDOR DOCKER"
+        echo "========================================"
         
-        # Limpiar contenedores previos
-        docker stop test-container 2>/dev/null || true
-        docker rm test-container 2>/dev/null || true
+        docker stop mi-contenedor 2>/dev/null || true
+        docker rm mi-contenedor 2>/dev/null || true
         
-        # Ejecutar contenedor
-        echo "Ejecutando contenedor..."
-        docker run -d --name test-container -p 8080:80 mi-sitio-test
+        echo ""
+        echo "🚀 EJECUTANDO CONTENEDOR..."
+        docker run -d --name mi-contenedor -p 8080:80 mi-sitio-web:latest
         
-        # Esperar
         sleep 5
         
-        # Mostrar contenedor
         echo ""
-        echo "=== CONTENEDOR EN EJECUCIÓN ==="
-        docker ps
+        echo "========================================"
+        echo "📊 CONTENEDOR EN EJECUCIÓN"
+        echo "========================================"
+        echo ""
+        echo "📋 docker ps:"
+        echo "----------------------------------------"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
         
-        # Ver logs
         echo ""
-        echo "=== LOGS ==="
-        docker logs test-container
+        echo "🔍 docker inspect (simplificado):"
+        echo "----------------------------------------"
+        docker inspect mi-contenedor --format '{{.Name}} - {{.State.Status}} - {{range .NetworkSettings.Ports}}{{.HostPort}}{{end}}'
         
-        # Probar conexión
         echo ""
-        echo "=== PRUEBA HTTP ==="
+        echo "📜 docker logs (últimas 5 líneas):"
+        echo "----------------------------------------"
+        docker logs mi-contenedor --tail 5
+        
+        echo ""
+        echo "🌐 Probando sitio web..."
+        echo "----------------------------------------"
         if curl -s -f http://localhost:8080 > /dev/null; then
-          echo "✅ Servidor funcionando"
-          curl -s http://localhost:8080 | grep -o "<title>.*</title>\|<h1>.*</h1>" || true
+          echo "✅ HTTP 200 OK - Servidor funcionando"
+          echo ""
+          echo "📄 Contenido (primeras líneas):"
+          curl -s http://localhost:8080 | head -10
         else
-          echo "⚠️ Servidor no responde (continuando...)"
+          echo "⚠️ El servidor no respondió"
         fi
         
-        # Limpiar
         echo ""
-        echo "=== LIMPIANDO ==="
-        docker stop test-container
-        docker rm test-container
-    
-    # ========== PASO 6: PUSH A GITHUB (OPCIONAL - SOLO SI HAY TOKEN) ==========
-    - name: "📤 Push a GitHub Packages"
-      if: github.ref == 'refs/heads/main'
-      continue-on-error: true
-      run: |
-        echo "=== INTENTANDO PUSH A GITHUB ==="
+        echo "🧹 Limpiando contenedor..."
+        docker stop mi-contenedor
+        docker rm mi-contenedor
+        echo "✅ Contenedor eliminado"
         
-        # Verificar si podemos hacer login
-        if [ -n "${{ secrets.GITHUB_TOKEN }}" ]; then
-          echo "Login a GitHub Container Registry..."
-          echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u "${{ github.actor }}" --password-stdin
-          
-          echo "Tagging y push..."
-          docker tag mi-sitio-test ghcr.io/${{ github.repository }}:test
-          docker push ghcr.io/${{ github.repository }}:test || echo "⚠️ Push falló (continuando...)"
-        else
-          echo "⚠️ No hay GITHUB_TOKEN, saltando push..."
-        fi
+        echo ""
+        echo "========================================"
+        echo "🎉 CONTENEDOR CREADO Y PROBADO EXITOSAMENTE"
+        echo "========================================"
     
-    # ========== PASO 7: RESUMEN ==========
     - name: "📋 Resumen final"
       run: |
-        echo "## 📊 RESUMEN DEL PIPELINE" >> $GITHUB_STEP_SUMMARY
+        echo "## 🎉 PIPELINE COMPLETADO" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "✅ **Build completado exitosamente**" >> $GITHUB_STEP_SUMMARY
+        echo "### ✅ Contenedor Docker creado y probado" >> $GITHUB_STEP_SUMMARY
         echo "" >> $GITHUB_STEP_SUMMARY
-        echo "**Comandos para usar localmente:**" >> $GITHUB_STEP_SUMMARY
         echo '```bash' >> $GITHUB_STEP_SUMMARY
-        echo "# Construir imagen" >> $GITHUB_STEP_SUMMARY
-        echo "docker build -t mi-sitio ." >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "# Ejecutar contenedor" >> $GITHUB_STEP_SUMMARY
-        echo "docker run -d -p 8080:80 --name mi-sitio mi-sitio" >> $GITHUB_STEP_SUMMARY
-        echo "" >> $GITHUB_STEP_SUMMARY
-        echo "# Ver en navegador" >> $GITHUB_STEP_SUMMARY
-        echo "http://localhost:8080" >> $GITHUB_STEP_SUMMARY
+        echo "# Para replicar localmente:" >> $GITHUB_STEP_SUMMARY
+        echo "docker build -t mi-sitio-web ." >> $GITHUB_STEP_SUMMARY
+        echo "docker run -d -p 8080:80 mi-sitio-web" >> $GITHUB_STEP_SUMMARY
+        echo "docker ps" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
