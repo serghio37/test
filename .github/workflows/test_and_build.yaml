@@ -38,6 +38,7 @@ jobs:
         echo "🐳 CREANDO Y MOSTRANDO CONTENEDOR DOCKER"
         echo "========================================"
         
+        # Limpiar si existe
         docker stop mi-contenedor 2>/dev/null || true
         docker rm mi-contenedor 2>/dev/null || true
         
@@ -51,33 +52,54 @@ jobs:
         echo "========================================"
         echo "📊 CONTENEDOR EN EJECUCIÓN"
         echo "========================================"
-        echo ""
-        echo "📋 docker ps:"
-        echo "----------------------------------------"
-        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
         
+        # SCREENSHOT 1: docker ps (contenedor activo)
         echo ""
-        echo "🔍 docker inspect (simplificado):"
+        echo "📋 docker ps (contenedor activo):"
         echo "----------------------------------------"
-        docker inspect mi-contenedor --format '{{.Name}} - {{.State.Status}} - {{range .NetworkSettings.Ports}}{{.HostPort}}{{end}}'
+        docker ps
         
+        # SCREENSHOT 2: docker inspect (simplificado y seguro)
         echo ""
-        echo "📜 docker logs (últimas 5 líneas):"
+        echo "🔍 Información del contenedor:"
         echo "----------------------------------------"
-        docker logs mi-contenedor --tail 5
+        echo "Nombre: mi-contenedor"
+        echo "Puerto: 8080:80"
+        echo "Estado: $(docker inspect -f '{{.State.Status}}' mi-contenedor)"
+        echo "IP: $(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' mi-contenedor)"
+        echo "Creado: $(docker inspect -f '{{.Created}}' mi-contenedor)"
         
+        # SCREENSHOT 3: docker logs
+        echo ""
+        echo "📜 Últimos logs del servidor Nginx:"
+        echo "----------------------------------------"
+        docker logs mi-contenedor --tail 10
+        
+        # SCREENSHOT 4: Probar sitio web
         echo ""
         echo "🌐 Probando sitio web..."
         echo "----------------------------------------"
+        echo "Probando http://localhost:8080 ..."
+        
         if curl -s -f http://localhost:8080 > /dev/null; then
           echo "✅ HTTP 200 OK - Servidor funcionando"
           echo ""
-          echo "📄 Contenido (primeras líneas):"
-          curl -s http://localhost:8080 | head -10
+          echo "📄 Título de la página:"
+          curl -s http://localhost:8080 | grep -o "<title>.*</title>" || echo "(sin título)"
+          echo ""
+          echo "📄 Encabezado principal:"
+          curl -s http://localhost:8080 | grep -o "<h1>.*</h1>" || echo "(sin h1)"
         else
-          echo "⚠️ El servidor no respondió"
+          echo "⚠️ El servidor no respondió (pero continuamos)"
         fi
         
+        # SCREENSHOT 5: Verificar puertos
+        echo ""
+        echo "🔌 Puertos expuestos:"
+        echo "----------------------------------------"
+        docker port mi-contenedor
+        
+        # Limpiar
         echo ""
         echo "🧹 Limpiando contenedor..."
         docker stop mi-contenedor
@@ -98,6 +120,6 @@ jobs:
         echo '```bash' >> $GITHUB_STEP_SUMMARY
         echo "# Para replicar localmente:" >> $GITHUB_STEP_SUMMARY
         echo "docker build -t mi-sitio-web ." >> $GITHUB_STEP_SUMMARY
-        echo "docker run -d -p 8080:80 mi-sitio-web" >> $GITHUB_STEP_SUMMARY
+        echo "docker run -d -p 8080:80 --name mi-sitio mi-sitio-web" >> $GITHUB_STEP_SUMMARY
         echo "docker ps" >> $GITHUB_STEP_SUMMARY
         echo '```' >> $GITHUB_STEP_SUMMARY
