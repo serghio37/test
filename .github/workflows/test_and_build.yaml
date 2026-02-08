@@ -2,9 +2,9 @@ name: 🚀 Docker CI/CD Pipeline Completo
 
 on:
   push:
-    branches: [ "main" ]
+    branches: ["main"]
   pull_request:
-    branches: [ "main" ]
+    branches: ["main"]
 
 permissions:
   contents: read
@@ -53,14 +53,6 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: "🏷️ Configurar tags de imagen"
-      id: meta
-      run: |
-        echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
-        echo "OWNER=${{ github.repository_owner }}" >> $GITHUB_ENV
-        echo "SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
-        echo "tags=ghcr.io/${{ github.repository }}:latest,ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_OUTPUT
-    
     - name: "🐳 Construir imagen Docker"
       id: docker_build
       run: |
@@ -76,7 +68,7 @@ jobs:
         echo "✅ Imagen almacenada en GitHub Packages"
     
     # ==================== FASE 4: TEST CONTENEDOR ====================
-    - name: "🧪 Probar contenedor Docker (crear y mostrar)"
+    - name: "🧪 Probar contenedor Docker"
       run: |
         echo ""
         echo "========================================="
@@ -102,7 +94,7 @@ jobs:
         echo "⏳ ESPERANDO INICIO DEL SERVIDOR (5 segundos)..."
         sleep 5
         
-        # 4. MOSTRAR CONTENEDOR CREADO (¡ESTE ES EL PUNTO CLAVE!)
+        # 4. MOSTRAR CONTENEDOR CREADO
         echo ""
         echo "========================================="
         echo "📊 CONTENEDOR EN EJECUCIÓN"
@@ -116,13 +108,12 @@ jobs:
         # 5. Mostrar detalles del contenedor
         echo "🔍 INFORMACIÓN DETALLADA DEL CONTENEDOR:"
         echo "-----------------------------------------"
-        docker inspect mi-sitio-web-test --format \
-          "Nombre: {{.Name}}
-Estado: {{.State.Status}} (desde {{.State.StartedAt}})
-IP Interna: {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}
-Puerto Mapeado: 8080 → 80
-ID: {{.Id}}
-Imagen: {{.Config.Image}}"
+        docker inspect mi-sitio-web-test --format "Nombre: {{.Name}}
+        Estado: {{.State.Status}} (desde {{.State.StartedAt}})
+        IP Interna: {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}
+        Puerto Mapeado: 8080 → 80
+        ID: {{.Id}}
+        Imagen: {{.Config.Image}}"
         echo ""
         
         # 6. Mostrar logs
@@ -148,14 +139,7 @@ Imagen: {{.Config.Image}}"
         
         echo ""
         
-        # 8. Estadísticas
-        echo "📊 ESTADÍSTICAS DEL CONTENEDOR:"
-        echo "-----------------------------------------"
-        docker stats mi-sitio-web-test --no-stream --format \
-          "CPU: {{.CPUPerc}}\nMemoria: {{.MemUsage}}\n"
-        
-        # 9. Limpiar
-        echo ""
+        # 8. Limpiar
         echo "🧹 LIMPIANDO CONTENEDOR DE PRUEBA..."
         docker stop mi-sitio-web-test
         docker rm mi-sitio-web-test
@@ -192,11 +176,3 @@ Imagen: {{.Config.Image}}"
         echo "- 📊 [Ver este workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
         echo "- 📦 [Ver imagen en GitHub Packages](https://github.com/${{ github.repository }}/pkgs/container/$(echo ${{ github.repository }} | cut -d'/' -f2))" >> $GITHUB_STEP_SUMMARY
         echo "- 🌐 [Acceder al sitio](http://localhost:8080) (después de ejecutar contenedor)" >> $GITHUB_STEP_SUMMARY
-    
-    # ==================== FASE 6: NOTIFICACIÓN (OPCIONAL) ====================
-    - name: "📢 Notificar éxito"
-      if: success()
-      run: |
-        echo "✅ PIPELINE COMPLETADO - $(date)"
-        echo "🕐 Duración: ${{ job.status }}"
-        echo "📊 Resumen disponible en la pestaña 'Summary'"
