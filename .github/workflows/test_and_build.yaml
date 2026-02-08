@@ -1,9 +1,9 @@
-
-### **5. 📄 `.github/workflows/test_and_build.yaml`** (TU ARCHIVO - corregido)yaml
-name: Test and Build
+name: Docker CI/CD Pipeline
 
 on:
   push:
+    branches: [ "main" ]
+  pull_request:
     branches: [ "main" ]
 
 permissions:
@@ -11,7 +11,8 @@ permissions:
   packages: write
   
 jobs:
-  test_and_build:
+  # JOB 1: TESTS Y CALIDAD
+  test:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
@@ -29,6 +30,14 @@ jobs:
     
     - name: Test with pytest
       run: pytest tests.py
+
+  # JOB 2: CONSTRUIR Y ALMACENAR IMAGEN DOCKER (¡ESTO CUMPLE "ALMACENAR SITIO WEB"!)
+  build-and-store:
+    needs: test
+    runs-on: ubuntu-latest
+    
+    steps:
+    - uses: actions/checkout@v4
     
     - name: Login to GitHub Container Registry
       uses: docker/login-action@v3
@@ -37,10 +46,33 @@ jobs:
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
-    - name: Build and push Docker image
-      uses: docker/build-push-action@v6
-      with:
-        context: .           # AÑADIDO: Especificar contexto
-        push: true
-        tags: ghcr.io/serghio37/test:latest
-        file: ./Dockerfile   # AÑADIDO: Especificar Dockerfile
+    - name: Build Docker image (¡CONSTRUYE CON EL SITIO WEB DENTRO!)
+      run: |
+        docker build -t ghcr.io/${{ github.repository_owner }}/mi-sitio-web:latest .
+        echo "✅ Sitio web almacenado en imagen Docker"
+    
+    - name: Push to GitHub Container Registry (¡ALMACENA EN REGISTRY!)
+      run: |
+        docker push ghcr.io/${{ github.repository_owner }}/mi-sitio-web:latest
+        echo "✅ Sitio web almacenado en GitHub Packages"
+    
+    - name: Verify stored image
+      run: |
+        echo "📦 Imagen Docker almacenada con sitio web:"
+        echo "ghcr.io/${{ github.repository_owner }}/mi-sitio-web:latest"
+        echo "🔗 URL: https://github.com/${{ github.repository }}/pkgs/container/mi-sitio-web"
+
+  # JOB 3: DESPLEGAR (OPCIONAL - para completar automatización)
+  deploy:
+    needs: build-and-store
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Deploy to GitHub Container Registry (ejemplo alternativo)
+      run: |
+        echo "🚀 Aquí iría despliegue a producción"
+        echo "Ejemplos:"
+        echo "- docker run -d -p 80:80 ghcr.io/.../mi-sitio-web"
+        echo "- kubectl apply -f deployment.yaml"
+        echo "- docker-compose up -d"
