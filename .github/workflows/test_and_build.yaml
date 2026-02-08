@@ -1,87 +1,202 @@
-name: Docker CI/CD
+name: 🚀 Docker CI/CD Pipeline Completo
 
 on:
   push:
+    branches: [ "main" ]
+  pull_request:
     branches: [ "main" ]
 
 permissions:
   contents: read
   packages: write
   id-token: write
-  
+
 jobs:
-  build:
+  ci_cd_pipeline:
     runs-on: ubuntu-latest
     
     permissions:
       contents: read
       packages: write
       id-token: write
-      
+    
     steps:
-    # 1. CHECKOUT (visible)
+    # ==================== FASE 1: PREPARACIÓN ====================
     - name: "📥 Checkout código"
       uses: actions/checkout@v4
     
-    # 2. SETUP PYTHON (visible)  
+    # ==================== FASE 2: TESTS PYTHON ====================
     - name: "🐍 Setup Python 3.11"
       uses: actions/setup-python@v3
       with:
         python-version: "3.11"
     
-    # 3. INSTALL DEPS (visible)
-    - name: "📦 Install dependencies"
-      run: pip install -r requirements.txt
+    - name: "📦 Install Python dependencies"
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
     
-    # 4. LINTING (visible)
-    - name: "🔍 Check Linting (Ruff)"
-      run: ruff check .
+    - name: "🔍 Linting con Ruff"
+      run: ruff check . --output-format=github
     
-    # 5. TESTS (visible)
-    - name: "🧪 Test with pytest"
-      run: pytest tests.py
+    - name: "🧪 Tests con pytest"
+      run: |
+        echo "=== EJECUTANDO TESTS PYTHON ==="
+        pytest tests.py -v
+        echo "✅ Tests completados"
     
-    # 6. LOGIN (visible)
-    - name: "🔑 Login to GitHub Container Registry"
+    # ==================== FASE 3: BUILD DOCKER ====================
+    - name: "🔑 Login a GitHub Container Registry"
       uses: docker/login-action@v3
       with:
         registry: ghcr.io
         username: ${{ github.actor }}
         password: ${{ secrets.GITHUB_TOKEN }}
     
-    # 7. METADATA
-    - name: "🏷️ Extract metadata"
+    - name: "🏷️ Configurar tags de imagen"
       id: meta
-      uses: docker/metadata-action@v5
-      with:
-        images: ghcr.io/${{ github.repository }}
-    
-    # 8. BUILD AND PUSH (visible - aquí estaba el link)
-    - name: "🐳 Build and push Docker image"
-      id: docker_build
-      uses: docker/build-push-action@v6
-      with:
-        context: .
-        push: true
-        tags: ${{ steps.meta.outputs.tags }}
-        labels: ${{ steps.meta.outputs.labels }}
-    
-    # 9. 🔥 NUEVO: MOSTRAR LINK PARA DESPLEGAR
-    - name: "🚀 Show deployment commands"
       run: |
+        echo "REPO=${{ github.repository }}" >> $GITHUB_ENV
+        echo "OWNER=${{ github.repository_owner }}" >> $GITHUB_ENV
+        echo "SHA_SHORT=$(echo ${{ github.sha }} | cut -c1-7)" >> $GITHUB_ENV
+        echo "tags=ghcr.io/${{ github.repository }}:latest,ghcr.io/${{ github.repository }}:${{ github.sha }}" >> $GITHUB_OUTPUT
+    
+    - name: "🐳 Construir imagen Docker"
+      id: docker_build
+      run: |
+        echo "=== CONSTRUYENDO IMAGEN DOCKER ==="
+        docker build -t ghcr.io/${{ github.repository }}:latest .
+        echo "✅ Imagen construida: ghcr.io/${{ github.repository }}:latest"
+    
+    - name: "📤 Push imagen a GitHub Packages"
+      run: |
+        echo "=== SUBIENDO IMAGEN A REGISTRY ==="
+        docker push ghcr.io/${{ github.repository }}:latest
+        docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+        echo "✅ Imagen almacenada en GitHub Packages"
+    
+    # ==================== FASE 4: TEST CONTENEDOR ====================
+    - name: "🧪 Probar contenedor Docker (crear y mostrar)"
+      run: |
+        echo ""
         echo "========================================="
-        echo "✅ IMAGEN CONSTRUIDA Y PUBLICADA"
+        echo "🐳 TESTEO DE CONTENEDOR DOCKER EN ACCIÓN"
+        echo "========================================="
+        
+        # 1. Descargar imagen recién creada
+        echo ""
+        echo "📥 DESCARGANDO IMAGEN DEL REGISTRY..."
+        docker pull ghcr.io/${{ github.repository }}:latest
+        
+        # 2. Crear y ejecutar contenedor
+        echo ""
+        echo "🚀 CREANDO CONTENEDOR..."
+        docker run -d \
+          --name mi-sitio-web-test \
+          --hostname nginx-docker \
+          -p 8080:80 \
+          ghcr.io/${{ github.repository }}:latest
+        
+        # 3. Esperar que Nginx inicie
+        echo ""
+        echo "⏳ ESPERANDO INICIO DEL SERVIDOR (5 segundos)..."
+        sleep 5
+        
+        # 4. MOSTRAR CONTENEDOR CREADO (¡ESTE ES EL PUNTO CLAVE!)
+        echo ""
+        echo "========================================="
+        echo "📊 CONTENEDOR EN EJECUCIÓN"
         echo "========================================="
         echo ""
-        echo "📦 IMAGEN: ghcr.io/${{ github.repository }}:latest"
+        echo "📋 LISTA DE CONTENEDORES ACTIVOS:"
+        echo "-----------------------------------------"
+        docker ps --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}\t{{.CreatedAt}}"
         echo ""
-        echo "🔗 PARA DESCARGAR Y EJECUTAR LOCALMENTE:"
-        echo "docker pull ghcr.io/${{ github.repository }}:latest"
-        echo "docker run -d -p 8080:80 ghcr.io/${{ github.repository }}:latest"
+        
+        # 5. Mostrar detalles del contenedor
+        echo "🔍 INFORMACIÓN DETALLADA DEL CONTENEDOR:"
+        echo "-----------------------------------------"
+        docker inspect mi-sitio-web-test --format \
+          "Nombre: {{.Name}}
+Estado: {{.State.Status}} (desde {{.State.StartedAt}})
+IP Interna: {{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}
+Puerto Mapeado: 8080 → 80
+ID: {{.Id}}
+Imagen: {{.Config.Image}}"
         echo ""
-        echo "🔗 ACCEDER EN NAVEGADOR:"
-        echo "http://localhost:8080"
+        
+        # 6. Mostrar logs
+        echo "📜 ÚLTIMOS LOGS DEL SERVIDOR NGINX:"
+        echo "-----------------------------------------"
+        docker logs mi-sitio-web-test --tail 8
         echo ""
-        echo "🔗 VER IMAGEN EN GITHUB PACKAGES:"
-        echo "https://github.com/${{ github.repository }}/pkgs/container/$(echo ${{ github.repository }} | cut -d'/' -f2)"
+        
+        # 7. Probar que el sitio web funciona
+        echo "🌐 PRUEBA DEL SITIO WEB:"
+        echo "-----------------------------------------"
+        echo "Probando conexión a http://localhost:8080 ..."
+        
+        if curl -s -f http://localhost:8080 > /dev/null; then
+          echo "✅ CONEXIÓN EXITOSA - Servidor respondiendo"
+          echo ""
+          echo "📄 CONTENIDO DE LA PÁGINA (extracto):"
+          curl -s http://localhost:8080 | grep -E "<title>|</h1>|</p>" | head -5
+        else
+          echo "❌ ERROR: El servidor no respondió"
+          exit 1
+        fi
+        
+        echo ""
+        
+        # 8. Estadísticas
+        echo "📊 ESTADÍSTICAS DEL CONTENEDOR:"
+        echo "-----------------------------------------"
+        docker stats mi-sitio-web-test --no-stream --format \
+          "CPU: {{.CPUPerc}}\nMemoria: {{.MemUsage}}\n"
+        
+        # 9. Limpiar
+        echo ""
+        echo "🧹 LIMPIANDO CONTENEDOR DE PRUEBA..."
+        docker stop mi-sitio-web-test
+        docker rm mi-sitio-web-test
+        echo "✅ Contenedor detenido y eliminado"
+        
+        echo ""
         echo "========================================="
+        echo "🎉 TODAS LAS PRUEBAS COMPLETADAS EXITOSAMENTE"
+        echo "========================================="
+    
+    # ==================== FASE 5: RESUMEN Y ENLACES ====================
+    - name: "📋 Generar resumen del despliegue"
+      if: success()
+      run: |
+        echo "## 🚀 DESPLIEGUE COMPLETADO EXITOSAMENTE" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 📦 Imagen Docker Publicada" >> $GITHUB_STEP_SUMMARY
+        echo "- **Latest:** \`ghcr.io/${{ github.repository }}:latest\`" >> $GITHUB_STEP_SUMMARY
+        echo "- **Commit:** \`ghcr.io/${{ github.repository }}:${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🐳 Comandos para Usar la Imagen" >> $GITHUB_STEP_SUMMARY
+        echo '```bash' >> $GITHUB_STEP_SUMMARY
+        echo "# Descargar imagen" >> $GITHUB_STEP_SUMMARY
+        echo "docker pull ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Ejecutar contenedor" >> $GITHUB_STEP_SUMMARY
+        echo "docker run -d -p 8080:80 --name mi-sitio ghcr.io/${{ github.repository }}:latest" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "# Ver contenedor en ejecución" >> $GITHUB_STEP_SUMMARY
+        echo "docker ps" >> $GITHUB_STEP_SUMMARY
+        echo '```' >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "### 🔗 Enlaces" >> $GITHUB_STEP_SUMMARY
+        echo "- 📊 [Ver este workflow](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})" >> $GITHUB_STEP_SUMMARY
+        echo "- 📦 [Ver imagen en GitHub Packages](https://github.com/${{ github.repository }}/pkgs/container/$(echo ${{ github.repository }} | cut -d'/' -f2))" >> $GITHUB_STEP_SUMMARY
+        echo "- 🌐 [Acceder al sitio](http://localhost:8080) (después de ejecutar contenedor)" >> $GITHUB_STEP_SUMMARY
+    
+    # ==================== FASE 6: NOTIFICACIÓN (OPCIONAL) ====================
+    - name: "📢 Notificar éxito"
+      if: success()
+      run: |
+        echo "✅ PIPELINE COMPLETADO - $(date)"
+        echo "🕐 Duración: ${{ job.status }}"
+        echo "📊 Resumen disponible en la pestaña 'Summary'"
